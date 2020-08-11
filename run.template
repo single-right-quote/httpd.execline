@@ -1,0 +1,37 @@
+#!/bin/execlineb -WP
+#
+# example `run` script for daemontools-style process supervision
+# replace contents in `${}` and copy to `./run`
+
+# for logging: redirect standard error to standard output
+fdmove -c 2 1
+
+# clear the entire environment except for PATH
+emptyenv -p
+
+# required by `s6-tld`
+export CERTFILE /etc/letsencrypt/live/${YOUR_SITE_HERE}/fullchain.pem
+export KEYFILE /etc/letsencrypt/live/${YOUR_SITE_HERE}/privkey.pem
+
+# we run as root until very early in `./binaries/httpd.execline` and `s6-tlsd`; this sets up environment variables for dropping priveleges
+#
+# sample numerical user ID for user `s6-tlsd` runs as (after reading certificate)
+export TLS_UID ${YOUR_TLS_USER_USER_ID_HERE}
+export TLS_GID ${YOUR_TLS_USER_GROUP_ID_HERE}
+# user for ./binaries/httpd.execline (after `chroot(8)`)
+s6-envuidgid ${YOUR_HTTP_USER_NAME_HERE}
+
+# somewhat verbose command line to make the httpd able to log the PID reported by s6-tcpserver  
+# (s6-tcpserver prints the pid of `s6-tlsd`, but `./httpd.execline` is a child of said PID)
+s6-tcpserver4
+	# for logging: log beginning and end of every connection
+	-v 2
+	# allow 1000 simultaneous connections; allow them all to be from the same ip address
+	-c 1000 -C 1000
+	--
+	${YOUR_IP_ADDRESS_HERE}
+	443
+		getpid process_id # for logging
+		s6-tlsd
+			--
+				./binaries/httpd.execline

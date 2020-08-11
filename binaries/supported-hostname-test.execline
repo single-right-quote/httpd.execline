@@ -1,0 +1,54 @@
+#!/binaries/execlineb -WS1
+# `supported-hostname-test.execline hostname`
+# 
+# tests if `hostname` is supported by this server, by checking if
+# a directory by that exact name exists in the current working directory  
+# immediately 404s otherwise
+#
+# hard depends on these external `httpd.execline` subscripts:
+#
+# + ./http-error-response.execline: and thus,
+# + ./log.execline
+#
+
+# protect Special Subdirectories
+#
+# + `/binaries` is change root--available static binaries and helper scripts
+# + `tcp-access-rules` for the pseudo-firewall
+# + `.` and `..` are to disallow clients being Naughty
+# + the other directories are for process supervision things
+#
+# note: general policy for this server is to 404 where we "should" 403.
+#
+ifelse {
+	s6-test \${1} = binaries -o
+		\${1} = data -o
+		\${1} = event -o
+		\${1} = log -o
+		\${1} = supervise -o
+		\${1} = tcp-access-rules -o
+		\${1} = . -o
+		\${1} = ..
+}
+{
+	if {
+		http-error-response.execline
+			404
+			"not found"
+			"illegal host: \""${1}\"
+	}
+	exit 1
+}
+# reject unsupported hostnames
+#
+ifelse { s6-test ! -d \${1} }
+{
+	if {
+		http-error-response.execline
+			404
+			"not found"
+			"unsupported host: \""${1}\"
+	}
+	exit 1
+}
+exit 0

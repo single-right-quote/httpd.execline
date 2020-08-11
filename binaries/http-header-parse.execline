@@ -1,0 +1,191 @@
+#!/binaries/execlineb -W
+## `http-header-parse.execline supported-hostname-test [rest of program]`
+#
+# expects a series of http headers from standard input  
+# exits syntax error otherwise
+#
+# current hard dependencies on external ./httpd.execline subscripts:
+# 
+# + ./get-line-from-client.execline
+# + ./http-error-response.execline: and thus,
+# + ./log.execline
+#
+# the first argument is a program to call when parsing a `Host` header
+# for the first time (usually the first line, but this convention is not
+# required); it should exit zero on a hostname the program supports,
+# and nonzero otherwise (in which case this program halts execution
+# immediately.)
+#
+# on a successful parse, we export environment variables of the form
+# `http_header_parse_${http_header}` and exec(3ps) into the remaining
+# program (excluding the first argument, of course!)  
+# if we do not exec(3p) into that argument list, the program will halt
+# completely, and **the currently exported environment variables will be
+# unavailable**; thus the expectation that the remaining script will be
+# passed as arguments, execline-style.  
+# this makes handling error cases difficult to do without hard depending
+# on other `httpd.execline` subscripts.  
+# TODO: [hard, design problem]: export failure information into the
+# environment, exec(3p)ing into the remaining program instead of exiting
+# immediately
+#
+# dealing with Host headers makes this script much more complicated than
+# it already needed to be. (turns out, existing servers often just ignore
+# some of the MUSTs we respect here! dammit…)
+#
+
+# the remaining program is supplied **after an initial argument we must
+# preserve and use**. we have not found a way to handle this without losing
+# efficiency (see the shebang (the "#!" line, on line 1))
+#
+importas supported_hostname_test 1
+shift
+elgetpositionals
+emptyenv -P
+
+# the overall plan is a simple recursive(!) script:
+#
+# + on an empty line, exec into the remaining program
+# + on a nomempty line, parse for a single header
+#
+# we use recursion to permanently modify the environment of the current
+# process for the remaining script (passed as arugments) to read from; we
+# simply cannot do this with execline’s built-in looping construct (which
+# performs the equivalent of spawning a *subshell* on every iteration)  
+# this is a heavy weakness for implementing actual program logic; we expect
+# the author of execline to never provide a convenient way to circumvent this
+# problem, as supporting Actual Programming Logic is out of scope for the
+# language (for example: see all the use of external tools `grep` and `sed`
+# throughout `httpd.execline`, as execline’s string manipulation tools are
+# (deliberately) very underpowered)
+#
+
+backtick -i -n current_line { get-line-from-client.execline }
+
+### terminating case: empty line
+#
+# exec(3p) the remaining program
+# 
+ifelse {
+	pipeline { printenv current_line }
+	grep -s "^ *$"
+}
+{
+	# the client MUST send a Host header, halt otherwise
+	#
+	ifelse { s6-test ! -v http_header_parse_Host }
+	{
+		http-error-response.execline
+			400
+			"syntax error"
+			"client request lacking Host header"
+	}
+
+	unexport current_line
+	unexport header_name
+	unexport header_contents
+	${@}
+}
+
+### recursive case: parse for a header
+#
+# after parsing, exec(3p) this script with the hostname validating
+# subscript, then the remaing program, as arguments
+# 
+backtick -I -n header_name {
+	pipeline { printenv current_line }
+	pipeline { sed -n "s/^([^ :]+):.*/\\1/p" }
+	read
+}
+backtick -I -n header_contents {
+	pipeline { printenv current_line }
+	# strip spaces or tabs from end of line  
+	# then print the second token verbatim  
+	#
+	# whitespace between header name and contents is optional
+	#
+	pipeline { sed -n "s/( 	)*$//; s/^[^ ]+ *([^ ].*)/\\1/p" }
+	read
+}
+ifelse {
+	s6-test ! -v header_name -o
+		! -v header_contents
+}
+{
+	importas -i current_line current_line
+	http-error-response.execline
+		400
+		"syntax error"
+		"http-header-parse.execline: bad header line: \""${current_line}\"
+}
+
+multisubstitute {
+	importas -i -u header_name header_name
+	importas -i -u header_contents header_contents
+}
+
+#### special case: host header
+#
+# short circuits the program  
+# TODO: [hard, design problem]: short circuit but exec(3p) into the
+# remaining program
+# 
+ifelse { s6-test \${header_name} = Host }
+{
+	# we MUST 400 on multiple Host headers
+	#
+	ifelse { s6-test -v http_header_parse_Host }
+	{
+		http-error-response.execline
+			400
+			"syntax error"
+			"http-header-parse.execline: multiple Host headers!??"
+	}
+
+	# validate hostnames, exiting on syntactically illegal ones
+	#
+	ifelse {
+		define hexadecimal "[0-9a-fA-F]"
+		multisubstitute {
+			# + dns-resolved hostname
+			define domain_name "[a-zA-Z0-9\-.]+"
+
+			# + ipv6 address (TODO: handle robustly)
+			define approximate_ipv6 "("${hexadecimal}"+)?(::"${hexadecimal}")+"
+
+			# + port string
+			define port ":[0-9]+"
+		}
+		#
+		# as we understand it, a valid ipv4 address is always a valid
+		# domain name address, so we do not actually have to handle
+		# that…
+		#
+		pipeline { s6-echo -n -- ${header_contents} }
+		grep -sv "^ *(("${domain_name}")|("${approximate_ipv6}"))("${port}")? *$"
+	}
+	{
+		http-error-response.execline
+			400
+			"syntax error"
+			"illegal host: "\"${header_contents}\"
+	}
+
+	# short circuit on unsupported hostnames
+	#
+	ifelse -n { ${supported_hostname_test} ${header_contents} }
+	{
+		fdclose 0
+		exit 0
+
+	}
+	export http_header_parse_${header_name} ${header_contents}
+	${0}
+		${supported_hostname_test}
+		${@}
+}
+
+export http_header_parse_${header_name} ${header_contents}
+${0}
+	${supported_hostname_test}
+	${@}

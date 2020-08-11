@@ -1,0 +1,269 @@
+#!/usr/local/skarnet/bin/execlineb -WP
+## `httpd.execline`: a simple static web server ###
+# 
+# i would like to note that simplicity is relative; the *implementation* of
+# this simple functionality is not exactly simple. there are several subscripts
+# with sufficently complex and (in all but one case) reusable functionality
+# that we separate them out.  
+# unfortunately, many themselves are (currently )dependent on other subscripts.
+
+### the http/1.1 protocol, oversimplified ###
+#
+# a client sends a request that normally looks something like
+#
+# ```
+# > [http_method] [resource] [http version]\r
+# > Host: [hostname]\r
+# > [quite possibly many other headers]\r
+# > \r
+# ```
+#
+# (note the `\r`s before newlines.  
+# (also: the Host header does not *have* to be the second line)
+#
+# we respond to the client appropriately, using to the following template:
+#
+# ```
+# < HTTP/1.1 [status code] [status message]\r
+# < Content-Type: [MIME type of the message body]\r
+# < Content-Length: [size of message body in bytes]\r
+# < Date: [the time as of this response]\r
+# < [Last-Modified: [date of the resource’s last revision]]\r
+# < \r
+# < [content, sent verbatim]
+# ```
+#
+# we do not follow the http/1.1 protocol precisely, but it is enough to satisfy
+# web browsers and tools like `curl(1)`, and to handle misbehaving clients.
+#
+
+### brief httpd.execline overview ##
+#
+# 1. sandboxing (paranoia?)
+# 2. read, validate the start line and Host header sent by the client
+# 3. find resource, determine its filetype
+# 4. send response to client
+#
+
+#### 1. sandboxing ###
+#
+# this recreates a security measure we picked up from `publicfile`: if this
+# server should somehow be hijacked, it will not be able to escape the
+# directory it runs in, and it will be running as an unpriveleged user  
+# in the setup of this server, the user `httpd` owns no files or directories in
+# the change-rooted directory, nor does it have any write permissions for those
+# files and directories, so a hijacked process will not be able to do very much
+export PATH /binaries
+chroot .
+s6-applyuidgid -U -z
+
+# see `./log.execline`
+export program_name httpd.execline
+
+# see end of script: handle crashes (or syntax errors in this script,) cleanly
+if -X -n -t {
+	#### 2. read from client, with interspersed validation ###
+	##### 2.1. start line ###
+	http-start-line-parse.execline
+	multisubstitute {
+		importas -i -u method http_start_line_parse_method
+		importas -i -u requested_resource http_start_line_parse_resource
+	}
+	ifelse -n {
+		s6-test \${method} = HEAD -o
+			\${method} = GET
+	}
+	{
+		http-error-response.execline
+			501
+			"method not implemented"
+			"unsupported method: \""${method}\"
+	}
+
+	##### 2.2. headers ###
+	http-header-parse.execline
+		supported-hostname-test.execline
+	# if we reach this point, all headers from the client request will be
+	# available in environment variables named after the header, in the form
+	# http_header_parse_${Header_Name}.  
+	# that said, we use only `Host` here.  
+	# `/http-header-parse.execline` is implemented in a wonderfully silly way
+ 	importas -i -u hostname http_header_parse_Host
+
+	# we don’t need to read anything more from the client
+	fdclose 0
+
+	foreground {
+		log.execline
+			"info:"
+			"client request:"
+			"for \""${hostname}\"":"
+			\"${method}\"
+			\"${requested_resource}\"
+	}
+
+	#### 3. process requested resource ###
+	backtick -i -n resource {
+		backtick -i -n candidate_resource {
+			backtick -in with_dot_and_dot_dot {
+				pipeline { s6-echo -n -- ${requested_resource} }
+				#
+				# strip query string, or resource location
+				#
+				pipeline { sed "s/[?#].*//; s@/\\.\\.?/@/@g" }
+				# decode url-encodings, if any  
+				urlencode -d
+			}
+			importas -i -u with_dot_and_dot_dot with_dot_and_dot_dot
+			# include the hostname in the final resource name
+			#
+			if { s6-echo -n -- ${hostname} }
+			# handle dot and dot-dot directory semantics  
+			# we prepend the hostname to the result, ensuring
+			# `${resource}` will route to somewhere inside the
+			# subdirectory named after the host
+			cleanname ${with_dot_and_dot_dot}
+		}
+		importas -i -u candidate_resource candidate_resource
+
+		# `${directory}` -> `${directory}/index.xhtml`  
+		ifelse { s6-test -d \${candidate_resource} }
+		{
+			s6-echo -n -- ${candidate_resource}/index.xhtml
+		}
+			s6-echo -n -- ${candidate_resource}
+	}
+	importas -i resource resource
+	ifelse { s6-test ! -r \${resource} }
+	{
+		http-error-response.execline
+			404
+			"not found"
+			"attempted: \""${resource}\"
+	}
+
+	#### 4. send response ###
+	##### 4.1. determine found resource's Content-Type ###
+	#
+	backtick -i -n Content-Type {
+		backtick -D "no.extension" -n extension {
+			pipeline { printenv resource }
+			# strip everything up to the non-periods after the final
+			# period in the string
+			#
+			pipeline { sed -n "s/.+\\.([^.]+)$/\\1/p" }
+			read
+		}
+
+		# publicfile-style custom filetypes: `file.{1}={2}` is served
+		# with `Content-Type` `${1}/${2}`. colons in the extension are
+		# transformed into periods, allowing files like
+		# `index.text=x:market` being served as `text/x.market`
+		#
+		# this overrides any other Content-Type determination mechanism
+		ifelse {
+			pipeline { printenv extension }
+			# this regex matches exactly what `publicfile` does
+			#
+			grep -s "[a-zA-Z0-9]+=[^=]+$"
+		}
+		{
+			pipeline { printenv extension }
+			tr := ./
+		}
+
+		# use `./data/Content-Type_table` as a key-value store: files with
+		# the name ${extension} map to the `Content-Type` embedded in
+		# their contents. for example, `./data/Content-Type_table/xhtml`
+		# contains the text “application/xhtml+xml” (with no newline)  
+		# (it is fine if the file contains a single newline at the end)
+		#
+		# if no key exists with the extension’s name, we fall back on
+		# “application/octet-stream”, as we should
+		importas -i -u extension extension
+		ifelse { s6-test -r \\./data/Content-Type_table/${extension} }
+		{
+			cat ./data/Content-Type_table/${extension}
+		}
+			s6-echo -n -- application/octet-stream
+	}
+
+	##### 4.2. miscellaneous headers ###
+	# TODO: separate this out, ideally make reusable
+
+	# file length in bytes: SHOULD be provided
+	backtick -i -n Content-Length { stat -c%s -- ${resource} }
+
+	# "[weekday], [month-day] [month] [year] [hours:minutes:seconds] GMT"  
+	# (example: "Tue, 03 Mar 2020 21:06:08 GMT")
+	define date_format "+%a, %d %b %Y %T GMT"
+
+	# the date the resource was last modified SHOULD be provided
+	backtick -i -n Last-Modified {
+		backtick -i -n seconds_since_epoch { stat -c%Y -- ${resource} }
+		importas -i -u seconds_since_epoch seconds_since_epoch
+		date -d @${seconds_since_epoch} -u ${date_format}
+	}
+
+	# current time of response: SHOULD be provided (why?)
+	backtick -i -n Date { date -u ${date_format} }
+
+
+	# allow for arbitrary HTTP header and HTTP status code overrides.
+	# for an example where the former might be useful, consider Content
+	# Security Policy; for the latter, consider HTTP 301 redirects
+	#
+	# be warned!! we do not validate these overrides!
+	backtick -i -n extra_headers {
+		ifelse { s6-test -r \\data/extra_headers/override/${resource} }
+		{
+			cat data/extra_headers/override/${resource}
+		}
+			cat data/extra_headers/default
+	}
+
+	backtick -D "200 ok" -n status_code_and_message {
+		if { s6-test -r \\data/status_override/${resource} }
+			cat data/status_override/${resource}
+	}
+
+	##### 4.3. send the response ###
+	multisubstitute {
+		importas -i -u status_code_and_message status_code_and_message
+		importas -i -u Content-Length Content-Length
+		importas -i -u Content-Type Content-Type
+		importas -i -u Date Date
+		importas -i -u Last-Modified Last-Modified
+		importas -i -u extra_headers extra_headers
+	}
+	if {
+		s6-echo -n -- "HTTP/1.1 "${status_code_and_message}"\r
+Content-Type: "${Content-Type}"\r
+Content-Length: "${Content-Length}"\r
+Last-Modified: "${Last-Modified}"\r
+Date: "${Date}"\r
+"${extra_headers}"\r
+\r
+"
+	}
+	foreground {
+		if -t { s6-test \${method} = GET }
+			cat ${resource}
+	}
+	# hack: write(3p) does not guarantee that all the
+	# content actually gets written before this process
+	# closes, and will not indicate in any way if a full
+	# write did not happen. a half second seems to be
+	# Long Enough to protect against this… hopefully…
+	s6-sleep -m 512
+	# TODO: (?) persistent connections? (recursion??)
+}
+	##### end of script  
+	# catches crashes (and syntax errors,,), and other unexpected things  
+	# useful for debugging! otherwise, clients might do strange things
+	#
+	# probably a bad sign this is still left in lol
+	http-error-response.execline
+		500
+		"internal server error"
+		"(i/o error? timeout?)"
