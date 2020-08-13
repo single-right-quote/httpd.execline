@@ -1,5 +1,12 @@
 #!/binaries/execlineb -WS2
 # http-error-response.execline STATUS_CODE STATUS_MESSAGE [LOG_MESSAGE]
+#
+# if `data/status-code/table/${hostname}/${STATUS_CODE} exists, `cat(1)` that
+# otherwise, fall back on a very generic error message
+#
+# TODO:
+# + handle headers for custom status code files
+# + related to above: get `Content-Length` correct
 
 fdclose 0
 foreground {
@@ -24,26 +31,35 @@ backtick -i -n Date { date -u "+%a, %d %b %Y %T GMT" }
 backtick -i -n extra_headers { cat data/extra_headers/default }
 
 multisubstitute {
-	importas -i -u Content-Length Content-Length
+# TODO:	importas -i -u Content-Length Content-Length
 	importas -i -u Date Date
 	importas -i -u extra_headers extra_headers
+	importas -D "invalid default hostname which should not match any hostname directory" hostname http_header_parse_Host
 }
 
 if {
 	s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
 Content-Type: application/xhtml+xml; charset=utf-8\r
-Content-Length: "${Content-Length}"\r
 Date: "${Date}"\r
 "${extra_headers}"\r
 \r
-<!DOCTYPE html>
+"
+}
+
+if {
+	ifelse { s6-test -r data/status-code_table/${hostname}/${1} }
+	{
+		# TODO: support `Content-Types`?? and `Content-Length`
+		cat data/status-code_table/${hostname}/${1}
+	}
+		s6-echo -n -- "<!DOCTYPE html>
 <html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">
 <head>
 	<meta charset=\"utf-8\" />
 	<title>"${2}"</title>
 	<style>html {
-	background: #FFFFEA;
-	color: #303020;
+	background: #F0E0BB;
+	color: #302011;
 	font-family: Tinos, serif;
 	text-align: center;
 }</style>

@@ -9,10 +9,10 @@ is that it is far less verbose.)
 
 it takes a lot of inspiration from
 [publicfile](https://cr.yp.to/publicfile.html), while trying to allow some level
-of customization (custom HTTP headers, file-extension/MIME-type mapping
-adjustments) without requiring you to edit code; here we use using a
-filesystem-driven configuration where the hierarchical file structure amounts to
-a simple structured key-value store.
+of customization (custom error status pages, custom HTTP headers,
+file-extension/MIME-type mapping adjustments) without requiring you to edit
+code; here we use using a filesystem-driven configuration where the hierarchical
+file structure amounts to a simple structured key-value store.
 
 \* “simple” here better describes functionality than implementation.
 

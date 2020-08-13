@@ -66,8 +66,8 @@ if -X -n -t {
 	##### 2.1. start line ###
 	http-start-line-parse.execline
 	multisubstitute {
-		importas -i -u method http_start_line_parse_method
-		importas -i -u requested_resource http_start_line_parse_resource
+		importas -i method http_start_line_parse_method
+		importas -i requested_resource http_start_line_parse_resource
 	}
 	ifelse -n {
 		s6-test \${method} = HEAD -o
@@ -88,7 +88,7 @@ if -X -n -t {
 	# http_header_parse_${Header_Name}.  
 	# that said, we use only `Host` here.  
 	# `/http-header-parse.execline` is implemented in a wonderfully silly way
- 	importas -i -u hostname http_header_parse_Host
+ 	importas -i hostname http_header_parse_Host
 
 	# we don’t need to read anything more from the client
 	fdclose 0
