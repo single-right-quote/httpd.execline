@@ -104,6 +104,8 @@ if -X -n -t {
 
 	#### 3. process requested resource ###
 	backtick -i -n resource {
+		cd supported_domains
+
 		backtick -i -n candidate_resource {
 			backtick -in with_dot_and_dot_dot {
 				pipeline { s6-echo -n -- ${requested_resource} }
@@ -134,7 +136,8 @@ if -X -n -t {
 			s6-echo -n -- ${candidate_resource}
 	}
 	importas -i resource resource
-	ifelse { s6-test ! -r \${resource} }
+
+	ifelse { s6-test ! -r supported_domains/${resource} }
 	{
 		http-error-response.execline
 			404
@@ -172,18 +175,18 @@ if -X -n -t {
 			tr := ./
 		}
 
-		# use `./data/Content-Type_table` as a key-value store: files with
+		# use `./configuration/Content-Type_table` as a key-value store: files with
 		# the name ${extension} map to the `Content-Type` embedded in
-		# their contents. for example, `./data/Content-Type_table/xhtml`
+		# their contents. for example, `./configuration/Content-Type_table/xhtml`
 		# contains the text “application/xhtml+xml” (with no newline)  
 		# (it is fine if the file contains a single newline at the end)
 		#
 		# if no key exists with the extension’s name, we fall back on
 		# “application/octet-stream”, as we should
 		importas -i -u extension extension
-		ifelse { s6-test -r \\./data/Content-Type_table/${extension} }
+		ifelse { s6-test -r configuration/Content-Type_table/${extension} }
 		{
-			cat ./data/Content-Type_table/${extension}
+			cat configuration/Content-Type_table/${extension}
 		}
 			s6-echo -n -- application/octet-stream
 	}
@@ -192,7 +195,7 @@ if -X -n -t {
 	# TODO: separate this out, ideally make reusable
 
 	# file length in bytes: SHOULD be provided
-	backtick -i -n Content-Length { stat -c%s -- ${resource} }
+	backtick -i -n Content-Length { stat -c%s -- supported_domains/${resource} }
 
 	# "[weekday], [month-day] [month] [year] [hours:minutes:seconds] GMT"  
 	# (example: "Tue, 03 Mar 2020 21:06:08 GMT")
@@ -200,7 +203,7 @@ if -X -n -t {
 
 	# the date the resource was last modified SHOULD be provided
 	backtick -i -n Last-Modified {
-		backtick -i -n seconds_since_epoch { stat -c%Y -- ${resource} }
+		backtick -i -n seconds_since_epoch { stat -c %Y -- supported_domains/${resource} }
 		importas -i -u seconds_since_epoch seconds_since_epoch
 		date -d @${seconds_since_epoch} -u ${date_format}
 	}
@@ -208,23 +211,22 @@ if -X -n -t {
 	# current time of response: SHOULD be provided (why?)
 	backtick -i -n Date { date -u ${date_format} }
 
-
 	# allow for arbitrary HTTP header and HTTP status code overrides.
 	# for an example where the former might be useful, consider Content
 	# Security Policy; for the latter, consider HTTP 301 redirects
 	#
 	# be warned!! we do not validate these overrides!
 	backtick -i -n extra_headers {
-		ifelse { s6-test -r \\data/extra_headers/override/${resource} }
+		ifelse { s6-test -r configuration/default_headers/override/${resource} }
 		{
-			cat data/extra_headers/override/${resource}
+			cat configuration/default_headers/override/${resource}
 		}
-			cat data/extra_headers/default
+			cat configuration/default_headers/default
 	}
 
 	backtick -D "200 ok" -n status_code_and_message {
-		if { s6-test -r \\data/status_override/${resource} }
-			cat data/status_override/${resource}
+		if { s6-test -r configuration/overrides/${resource} }
+			cat configuration/overrides/${resource}
 	}
 
 	##### 4.3. send the response ###
@@ -248,7 +250,7 @@ Date: "${Date}"\r
 	}
 	foreground {
 		if -t { s6-test \${method} = GET }
-			cat ${resource}
+			cat supported_domains/${resource}
 	}
 	# hack: write(3p) does not guarantee that all the
 	# content actually gets written before this process

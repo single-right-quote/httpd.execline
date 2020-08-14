@@ -1,7 +1,7 @@
 #!/binaries/execlineb -WS2
 # http-error-response.execline STATUS_CODE STATUS_MESSAGE [LOG_MESSAGE]
 #
-# if `data/status-code/table/${hostname}/${STATUS_CODE} exists, `cat(1)` that
+# if `configuration/status-code/table/${hostname}/${STATUS_CODE} exists, `cat(1)` that
 # otherwise, fall back on a very generic error message
 #
 # TODO:
@@ -28,7 +28,7 @@ backtick -i -n Content-Length {
 
 backtick -i -n Date { date -u "+%a, %d %b %Y %T GMT" }
 
-backtick -i -n extra_headers { cat data/extra_headers/default }
+backtick -i -n extra_headers { cat configuration/default_headers/default }
 
 multisubstitute {
 # TODO:	importas -i -u Content-Length Content-Length
@@ -47,10 +47,10 @@ Date: "${Date}"\r
 }
 
 if {
-	ifelse { s6-test -r data/status-code_table/${hostname}/${1} }
+	ifelse { s6-test -r configuration/error_response_pages/${hostname}/${1} }
 	{
 		# TODO: support `Content-Types`?? and `Content-Length`
-		cat data/status-code_table/${hostname}/${1}
+		cat configuration/error_response_pages/${hostname}/${1}
 	}
 		s6-echo -n -- "<!DOCTYPE html>
 <html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">

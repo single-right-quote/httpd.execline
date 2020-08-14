@@ -21,6 +21,8 @@ export TLS_GID ${YOUR_TLS_USER_GROUP_ID_HERE}
 # user for ./binaries/httpd.execline (after `chroot(8)`)
 s6-envuidgid ${YOUR_HTTP_USER_NAME_HERE}
 
+cd visible-to-httpd
+
 # somewhat verbose command line to make the httpd able to log the PID reported by s6-tcpserver  
 # (s6-tcpserver prints the pid of `s6-tlsd`, but `./httpd.execline` is a child of said PID)
 s6-tcpserver4

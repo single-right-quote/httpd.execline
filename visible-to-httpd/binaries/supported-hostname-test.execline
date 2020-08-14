@@ -1,0 +1,26 @@
+#!/binaries/execlineb -WS1
+# `supported-hostname-test.execline hostname`
+# 
+# tests if `hostname` is supported by this server, by checking if
+# a directory by that exact name exists in the current working directory  
+# immediately 404s otherwise
+#
+# hard depends on these external `httpd.execline` subscripts:
+#
+# + ./http-error-response.execline: and thus,
+# + ./log.execline
+#
+
+# reject unsupported hostnames
+#
+ifelse { s6-test ! -d \supported_domains/${1} }
+{
+	if {
+		http-error-response.execline
+			404
+			"not found"
+			"unsupported host: \""${1}\"
+	}
+	exit 1
+}
+exit 0
