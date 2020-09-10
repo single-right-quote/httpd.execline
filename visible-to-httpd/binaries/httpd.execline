@@ -225,8 +225,8 @@ if -X -n -t {
 	}
 
 	backtick -D "200 ok" -n status_code_and_message {
-		if { s6-test -r configuration/overrides/${resource} }
-			cat configuration/overrides/${resource}
+		if { s6-test -r configuration/overrides/${resource}/status_code }
+			cat configuration/overrides/${resource}/status_code
 	}
 
 	##### 4.3. send the response ###
