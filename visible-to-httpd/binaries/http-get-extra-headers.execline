@@ -1,0 +1,87 @@
+#!/binaries/execlineb -WS0
+#
+# http-get-particular-headers.execline [status-code]
+#
+# sufficiently annoyingly complex resource-specific HTTP header logic that
+# gets reused a lot
+#
+# headers are specified in a header directory, which has a file for each
+# header you wish to send; this imposes structure with almost no parsing at all
+#
+# exploiting the filesystem as more or less a map (as opposed to the trivial
+# implementation: using a single file containing the desired headers) means the
+# user need not bother with editing files containing `\r\n`s
+# (however, it is almost certainly considerably more annoying to use)
+#
+# TODO: ? status code overrides support??
+# TODO: write a GUI?? with like, `yad(1)` or something??? idk
+
+multisubstitute {
+	importas -i hostname http_header_parse_Host
+	importas -i resource resource
+}
+
+foreground { log.execline "resource: "${resource} }
+
+backtick -n header-directory {
+	# for status code pages specifically
+	ifelse {
+		s6-test \${#} != 0
+			-a -d configuration/error_response_pages/${1}/headers
+			-a -r configuration/error_response_pages/${1}/headers
+	}
+	{
+		s6-echo -n -- configuration/error_response_pages/${1}/headers
+	}
+
+	# otherwise: prioritize header specifications in order of specificity:
+	# by resource, then by hostname, then the fallback (and finally nothing)
+	ifelse {
+		s6-test -d configuration/overrides/${resource}/headers
+			-a -r configuration/overrides/${resource}/headers
+	}
+	{
+		s6-echo -n -- configuration/overrides/${resource}/headers
+	}
+	ifelse {
+		s6-test -d configuration/default_headers/${hostname}
+			-a -r configuration/default_headers/${hostname}
+	}
+	{
+		s6-echo -n -- configuration/default_headers/${hostname}
+	}
+	# the preferred name for a DNS lookup should begin with an alphanumeric,
+	# so “-fallback”, since it begins with a hyphen, should never conflict
+	# with a hostname anybody would ever actually use
+	ifelse {
+		s6-test -d configuration/default_headers/-fallback
+			-a -r configuration/default_headers/-fallback
+	}
+	{
+		s6-echo -n -- configuration/default_headers/-fallback
+	}
+		exit 1
+}
+
+# (we output nothing if there is no applicable header directory, which is fine)
+if -t { s6-test -v header-directory }
+	importas -i -u header-directory header-directory
+
+	foreground { log.execline "header-directory: "${header-directory} }
+
+	cd ${header-directory}
+	elglob -0 -s header_names *
+
+	# we’ll strip out `\r`s and `\n`s from filenames and file contents, in
+	# case the configuration should ever be made in a mischevious way
+	forx header_name { ${header_names} }
+		importas -i -u header_name header_name
+		if {
+			pipeline { s6-echo -n -- ${header_name}": " }
+			tr -d "\r\n"
+		}
+		if {
+			pipeline { cat ${header_name} }
+			tr -d "\r\n"
+		}
+	# do make sure not to forget to supply the final newline

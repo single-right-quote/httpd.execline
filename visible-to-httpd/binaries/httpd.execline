@@ -216,13 +216,7 @@ if -X -n -t {
 	# Security Policy; for the latter, consider HTTP 301 redirects
 	#
 	# be warned!! we do not validate these overrides!
-	backtick -i -n extra_headers {
-		ifelse { s6-test -r configuration/default_headers/override/${resource} }
-		{
-			cat configuration/default_headers/override/${resource}
-		}
-			cat configuration/default_headers/default
-	}
+	backtick -i -n extra_headers { http-get-extra-headers.execline }
 
 	backtick -D "200 ok" -n status_code_and_message {
 		if { s6-test -r configuration/overrides/${resource}/status_code }

@@ -14,44 +14,68 @@ foreground {
 		log.execline "fatal: ??"${1}"??: "${3}
 }
 
-# (why does `hoc -e` not work?)
-backtick -i -n Content-Length {
-	backtick -i -n message_length {
-		pipeline { s6-echo -n -- ${2} }
-		wc -c
-	}
-	importas -i -u message_length message_length
-
-	pipeline { s6-echo -- ${message_length}"*2 + 288" }
-	hoc
-}
-
 backtick -i -n Date { date -u "+%a, %d %b %Y %T GMT" }
-
-backtick -i -n extra_headers { cat configuration/default_headers/default }
+backtick -i -n extra_headers { http-get-extra-headers.execline ${1} }
 
 multisubstitute {
-# TODO:	importas -i -u Content-Length Content-Length
 	importas -i -u Date Date
 	importas -i -u extra_headers extra_headers
-	importas -D "invalid default hostname which should not match any hostname directory" hostname http_header_parse_Host
+	importas -D "?? no hostname ??" hostname http_header_parse_Host
 }
 
 if {
-	s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
-Content-Type: application/xhtml+xml; charset=utf-8\r
+	# if there is an error response page for this status code:
+	ifelse {
+		s6-test -d configuration/error_response_pages/${hostname}/${1}
+			-a -r configuration/error_response_pages/${hostname}/${1}
+	}
+	{
+		cd configuration/error_response_pages/${hostname}/${1}
+
+		backtick -D "application/xhtml+xml; charset=utf-8" -n Content-Type { cat Content-Type }
+		backtick -i -n Content-Length { wc -c message_body }
+
+		multisubstitute {
+			importas -i -u Content-Type Content-Type
+			importas -i -u Content-Length Content-Length
+		}
+
+		if {
+			s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
+Content-Type: "${Content-Type}"\r
+Content-Length: "${Content-Length}"\r
 Date: "${Date}"\r
 "${extra_headers}"\r
 \r
 "
-}
-
-if {
-	ifelse { s6-test -r configuration/error_response_pages/${hostname}/${1} }
-	{
-		# TODO: support `Content-Types`?? and `Content-Length`
-		cat configuration/error_response_pages/${hostname}/${1}
+		}
+		
+		cat message_body
 	}
+		# default: no error status page on file; use a hardcoded default
+
+		# (why does `hoc -e` not work?)
+		backtick -i -n Content-Length {
+			backtick -i -n message_length {
+				pipeline { s6-echo -n -- ${2} }
+				wc -c
+			}
+			importas -i -u message_length message_length
+
+			pipeline { s6-echo -- ${message_length}"*2 + 288" }
+			hoc
+		}
+		importas -i -u Content-Length Content-Length
+
+		if {
+			s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
+Content-Type: application/xhtml+xml; charset=utf-8\r
+Content-Length: "${Content-Length}"\r
+Date: "${Date}"\r
+"${extra_headers}"\r
+\r
+"
+		}
 		s6-echo -n -- "<!DOCTYPE html>
 <html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">
 <head>
@@ -70,6 +94,6 @@ if {
 </html>
 "
 }
+
 # hack: write(3p) is unsafe
-#
 s6-sleep -m 512
