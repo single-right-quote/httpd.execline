@@ -18,14 +18,13 @@ file structure amounts to a simple structured key-value store.
 
 ## usage ###
 
-if you’ve ever used the publicfile `httpd`, then the setup is familiar:
+if you’ve ever used the publicfile `httpd`, then the setup is somewhat familiar:
 `httpd.execline` expects to be run in a directory where there is a subdirectory
 matching every hostname the dæmon serves requests for; it will simply mirror the
 contents of every file in that subdirectory it is allowed to read.
 
 in short: if `example.org` routed to your machine, then place a directory named
-`./example.org` in the directory you’re running `./httpd.execline` from
-(normally, this one).
+`example.org/` in `./visible-to-httpd/supported_domains/`.
 
 (you should consider ensuring `httpd.execline` not have any write permissions
 for the hostname-directories and their contents.)
@@ -53,7 +52,7 @@ which you could use if you *don’t* need TLS), from
 furthermore, we assume your kernel supports `chroot`, and that you have
 userspace-level access to the feature, like GNU coreutils `chroot(1)`.
 
-#### `./binaries` ###
+#### `./visible-to-httpd/binaries` ###
 
 `httpd.execline` normally chroots into the directory it runs from, making it
 difficult to use dynamically linked versions of its hard dependencies. a
@@ -64,7 +63,8 @@ feasible configuration is to place statically linked dependencies into
 `s6-applyuidgid`, `s6-test`
 + [9base](https://tools.suckless.org/9base/):
 `tr(1)` `read(1)`, `hoc(1)`, `sed(1)`, `grep(1)`, `urlencode(1)`,
-`cleanname(1)`, `cat(1)` + [toybox](http://www.landley.net/toybox/): `wc(1)`,
+`cleanname(1)`, `cat(1)` 
++ [toybox](http://www.landley.net/toybox/): `wc(1)`,
 `date(1p)`, `printenv(1)`, `stat(1)`
 
 we heavily rely on plan 9 regular expression semantics for `sed(1)` and
@@ -72,92 +72,92 @@ we heavily rely on plan 9 regular expression semantics for `sed(1)` and
 effort. so long as i am writing this code for myself, i will not perform that
 effort for you.
 
-i would like to note that **s6-test receives information controlled by the
-client** and is thus **difficult to replace with a different take on
-`test(1p)`**; the use of `s6-test` here relies on the (non-standard! but very
-useful) functionality that an argument escaped with an initial backslash is
-never interpreted as an option to the program. without s6-test, handling
-user-controlled input *robustly* probably requires a workaround (piping into
-`grep -s`, perhaps?)
+<!-- an old version of this README explained that we use nonstandard functionality
+from `s6-test`, but adjustments to the filesystem layout for configuration and
+website layouts has rendered this moot. -->
 
-### additional, somewhat esoteric, functionality ###
+### configuration ###
 
-#### `Content-Type`s ###
+the directory `./visible-to-httpd/configuration` has several subdirectories for
+configuring headers and error status behavior.
 
-`httpd.execline` expects to see a subdirectory `./data/Content-Type_table`,
-where files named after file extensions contain the MIME type such files should
-be served as. for example, `data/Content-Type_table/html` should probably
-contain the string `text/html`.
+#### `./visible-to-httpd/configuration/Content-Type_table/` ###
 
-this feature can be overriden on a per-file basis by making its extension have
-the form `${1}=${2}`; such files will be served with a `Content-Type` of
-`{1}/${2}` (with colons in `${1}` or `${2}` converted to periods). (for example,
-a file named `index.text=x:market` will always be served with a `Content-Type`
-of `text/x.market`.)
+a key-value store for associating extensions
+with `Content-Type`s. for example, `data/Content-Type_table/html`
+should probably contain the string `text/html`.
 
-if no `Content-Type` can be determined, `httpd.execline` falls back on
-`application/octet-stream`.
+this feature can be overriden on a per-file basis in two ways, the
+second overriding even the first.
 
-#### HTTP headers ###
+1. giving a resource and extension of the form `${1}=${2}`; such files
+will be served with a `Content-Type` of `{1}/${2}` (with colons in
+`${1}` or `${2}` converted to periods). for example, a file named
+`index.text=x:market` will always be served with a `Content-Type` of
+`text/x.market`.
+2. using the per-resource `overrides` folder (see below) to specify a
+`Content-Type` header explicitly.
 
-`httpd.execline` expects `./data/` to have another subdirectory named
-`extra_headers`; and a file inside it named `default`, which may contain a
-series of `\r\n`-terminated HTTP-heades inside. `default` can be overriden on a
-per-file basis as follows:
+#### `./visible-to-httpd/configuration/default_headers/` ###
 
-say you have a client-side webapp at `${YOUR_SITE_HERE}/webapp/index.html` and
-you need a Content Security Policy that differs from the one specified in
-`./data/extra_headers/default`; create a file named
-`./data/extra_headers/${YOUR_SITE_HERE}/webapp/index.html` containing
-`\r\n`-separated headers as necessary.
+a collection of key-value stores to specify headers to send for all
+resources associated with a particular hostname, as well as a
+`-fallback` which takes effect if there is no store for that domain
+(or that specific resource; see `overrides` below).
 
-the UI for this is not convenient.
+(there is presently no mechanism for combining a more specific match
+for headers with a less specific one; you cannot combine unique
+headers for a resource on `my-cool-web.site` with the default headers
+for `my-cool-web.site, not to mention also with `-fallback`. but this
+functionality is probably well worth adding.)
 
-#### HTTP status codes ###
+in subfolders matching hostnames, files named after a header should
+contain the contents of that header. <!-- a personal site heavily
+associated with a mastodon account would perhaps add a file
+`X-Clacks-Overhead`, containing the contents `GNU Natalie Nguyen`. -->
+a `Strict-Transport-Security` file is a good idea; if you find it
+prudent to allow access as an onion service, an `Onion-Location` file
+is a good idea. and so on.
 
-a subdirectory of `./data/` named `status_override` can override HTTP status
-codes on a per-file basis the same way you can override HTTP headers. i use this
-for 301 redirects.
+`\r` and newlines will be stripped from filenames and file contents to
+prevent trivial mischevious configurations from breaking HTTP
+responses; other than this, **these HTTP header folders are not
+validated syntactically or semantically**.
 
-again, the interface to this feature in inconvenient.
+#### `./visible-to-httpd/configuration/error_response_pages/` ###
 
-## implementatoin details ###
+this directory may contain a subdirectory named after each hostname,
+each containing subdirectories for a numerical HTTP status code, each
+containing a required `message_body` file, an optional `Content-Type`
+file (defaulting to `application/xhtml+xml; charset=utf-8`), and an
+optional `headers` folder using the same scheme as the
+`default_headers` header specifications.
 
-### the subscripts ###
+for example: if you wanted to handle 404s at `my-cool-web.site` with
+an HTML file, write the contents of said file at
+`./visible-to-httpd/configuration/error_response_pages/404/my-cool-web.site/message_body`,
+and place `text/html` in a file `Content-Type` in the same folder.
 
-as mentioned, this script relies on several smaller subscripts, themselves often
-depedent on other subscripts. we list all subscripts in the implementation
-below, along with their dependencies:
+the error response code has a generic fallback built into the script.
+there really should be support for a `-fallback` domain like with
+domain-level `default_headers`.
 
-+ `./get-line-from-client.execline`: read a line from the client, timing out
-after 60 seconds + `./log.execline`: log, adding information useful for
-debugging + `./http-error-resonse.execline`: send an http resposne indicating
-error, halt(, and, optionally, log that we errored)
-+ `./http-start-line-parse.execline`: parse the start line and export its
-components into the environment + `./http-header-parse.execline`: parse the
-headers and export them into the environment
-+ `./supported-hostname-test.execline`: test if the first argument is a supported
-hostname, to signal whether to short-circuiting during header parsing
+#### `./visible-to-httpd/configuration/error_response_pages/` ###
 
-`./http-error-response.execline` depends on:
+this directory allows you to override the extra headers sent along
+with a resource, and attach a status code other than 200 with them. a
+folder named after the specific resource (including a prepended
+hostname) should may contain a `status_code` file containing a
+numerical status code and optional textual message, as well as a
+`headers` folder, which specifies headers using the `default_headers`
+scheme.
 
-+ `./log.execline`
+currently, the official website to `httpd-execline.eerie.garden`
+redirects to this github repository thanks to
 
-`./http-start-line-parse.execline` depends on:
-
-+ `./get-line-from-client.execline` + `./http-error-response.execline`: and thus
-+ `./log.execline`
-
-`./http-header-parse.execline` depends on:
-
-+ `./get-line-from-client.execline` + `./http-error-response.execline`: and thus
-+ `./log.execline`
-
-`./supported-hostname-test.execline` depends on:
-
-+ `./http-error-response.execline`: and thus + `./log.execline`
-
-looking at the dependencies, we observe that `get-line-from-client.execline` and
-`http-error-response.execline` are fundamental building blocks for the rest of
-the script. it seems worth considering consolidating the logger into the error
-response script.
++ the file
+`./visible-to-httpd/configuration/error_response_pages/httpd-execline.eerie.garden/index.xhtml/status_code`
+containing the text `301 moved permanently`; and
++ the file
+`./visible-to-httpd/configuration/error_response_pages/httpd-execline.eerie.garden/index.xhtml/headers/Location`
+containing `https://github.com/single-right-quote/httpd.execline`
