@@ -45,7 +45,7 @@ if {
 Content-Type: "${Content-Type}"\r
 Content-Length: "${Content-Length}"\r
 Date: "${Date}"\r
-"${extra_headers}"\r
+"${extra_headers}"
 \r
 "
 		}
@@ -72,7 +72,7 @@ Date: "${Date}"\r
 Content-Type: application/xhtml+xml; charset=utf-8\r
 Content-Length: "${Content-Length}"\r
 Date: "${Date}"\r
-"${extra_headers}"\r
+"${extra_headers}"
 \r
 "
 		}

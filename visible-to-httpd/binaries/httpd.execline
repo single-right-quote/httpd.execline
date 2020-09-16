@@ -238,7 +238,7 @@ Content-Type: "${Content-Type}"\r
 Content-Length: "${Content-Length}"\r
 Last-Modified: "${Last-Modified}"\r
 Date: "${Date}"\r
-"${extra_headers}"\r
+"${extra_headers}"
 \r
 "
 	}

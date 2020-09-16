@@ -84,4 +84,6 @@ if -t { s6-test -v header-directory }
 			pipeline { cat ${header_name} }
 			tr -d "\r\n"
 		}
-	# do make sure not to forget to supply the final newline
+		s6-echo -n -- "\r\n"
+	# do remember to add the terminating `\r\n`!
+
