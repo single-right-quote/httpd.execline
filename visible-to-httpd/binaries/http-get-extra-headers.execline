@@ -21,8 +21,6 @@ multisubstitute {
 	importas -i resource resource
 }
 
-foreground { log.execline "resource: "${resource} }
-
 backtick -n header-directory {
 	# for status code pages specifically
 	ifelse {
