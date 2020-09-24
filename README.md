@@ -139,7 +139,7 @@ an HTML file, write the contents of said file at
 and place `text/html` in a file `Content-Type` in the same folder.
 
 the error response code has a generic fallback built into the script.
-there really should be support for a `-fallback` domain like with
+you can override this using a `-fallback` domain folder, like with
 domain-level `default_headers`.
 
 #### `./visible-to-httpd/configuration/error_response_pages/` ###

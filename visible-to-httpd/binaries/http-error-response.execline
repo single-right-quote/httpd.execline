@@ -3,10 +3,6 @@
 #
 # if `configuration/status-code/table/${hostname}/${STATUS_CODE} exists, `cat(1)` that
 # otherwise, fall back on a very generic error message
-#
-# TODO:
-# + handle headers for custom status code files
-# + related to above: get `Content-Length` correct
 
 fdclose 0
 foreground {
@@ -23,14 +19,30 @@ multisubstitute {
 	importas -D "?? no hostname ??" hostname http_header_parse_Host
 }
 
-if {
-	# if there is an error response page for this status code:
+backtick -I -n error_response_directory {
 	ifelse {
 		s6-test -d configuration/error_response_pages/${hostname}/${1}
 			-a -r configuration/error_response_pages/${hostname}/${1}
 	}
 	{
-		cd configuration/error_response_pages/${hostname}/${1}
+		s6-echo -n -- configuration/error_response_pages/${hostname}/${1}
+	}
+	ifelse {
+		s6-test -d configuration/error_response_pages/-fallback/${1}
+			-a -r configuration/error_response_pages/-fallback/${1}
+	}
+	{
+		s6-echo -n -- configuration/error_response_pages/-fallback/${1}
+	}
+	exit 1
+}
+
+if {
+	# if there is an error response page for this status code:
+	ifelse { s6-test -v error_response_directory }
+	{
+		importas -i -u error_response_directory error_response_directory
+		cd ${error_response_directory}
 
 		backtick -D "application/xhtml+xml; charset=utf-8" -n Content-Type { cat Content-Type }
 		backtick -i -n Content-Length { wc -c message_body }
