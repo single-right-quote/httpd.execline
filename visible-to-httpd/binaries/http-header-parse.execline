@@ -60,7 +60,7 @@ emptyenv -P
 # (deliberately) very underpowered)
 #
 
-backtick -i -n current_line { get-line-from-client.execline }
+backtick -n current_line { get-line-from-client.execline }
 
 ### terminating case: empty line
 #
@@ -91,13 +91,13 @@ ifelse {
 #
 # after parsing, exec(3p) this script with the hostname validating
 # subscript, then the remaing program, as arguments
-# 
-backtick -I -n header_name {
+#
+backtick -x -n header_name {
 	pipeline { printenv current_line }
 	pipeline { sed -n "s/^([^ :]+):.*/\\1/p" }
 	read
 }
-backtick -I -n header_contents {
+backtick -x -n header_contents {
 	pipeline { printenv current_line }
 	# strip spaces or tabs from end of line  
 	# then print the second token verbatim  

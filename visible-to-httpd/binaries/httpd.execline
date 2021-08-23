@@ -103,11 +103,11 @@ if -X -n -t {
 	}
 
 	#### 3. process requested resource ###
-	backtick -i -n resource {
+	backtick -n resource {
 		cd supported_domains
 
-		backtick -i -n candidate_resource {
-			backtick -in with_dot_and_dot_dot {
+		backtick -n candidate_resource {
+			backtick -n with_dot_and_dot_dot {
 				pipeline { s6-echo -n -- ${requested_resource} }
 				#
 				# strip query string, or resource location
@@ -195,7 +195,7 @@ if -X -n -t {
 	# TODO: separate this out, ideally make reusable
 
 	# file length in bytes: SHOULD be provided
-	backtick -i -n Content-Length { stat -c%s -- supported_domains/${resource} }
+	backtick -n Content-Length { stat -c%s -- supported_domains/${resource} }
 
 	# "[weekday], [month-day] [month] [year] [hours:minutes:seconds] GMT"  
 	# (example: "Tue, 03 Mar 2020 21:06:08 GMT")
@@ -203,20 +203,19 @@ if -X -n -t {
 
 	# the date the resource was last modified SHOULD be provided
 	backtick -i -n Last-Modified {
-		backtick -i -n seconds_since_epoch { stat -c %Y -- supported_domains/${resource} }
-		importas -i -u seconds_since_epoch seconds_since_epoch
+		backtick -n -E seconds_since_epoch { stat -c %Y -- supported_domains/${resource} }
 		date -d @${seconds_since_epoch} -u ${date_format}
 	}
 
 	# current time of response: SHOULD be provided (why?)
-	backtick -i -n Date { date -u ${date_format} }
+	backtick -n Date { date -u ${date_format} }
 
 	# allow for arbitrary HTTP header and HTTP status code overrides.
 	# for an example where the former might be useful, consider Content
 	# Security Policy; for the latter, consider HTTP 301 redirects
 	#
 	# be warned!! we do not validate these overrides!
-	backtick -i -n extra_headers { http-get-extra-headers.execline }
+	backtick -n extra_headers { http-get-extra-headers.execline }
 
 	backtick -D "200 ok" -n status_code_and_message {
 		if { s6-test -r configuration/overrides/${resource}/status_code }

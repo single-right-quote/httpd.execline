@@ -2,11 +2,6 @@
 # wrapper around plan 9 read(1) to timeout after 60 seconds
 # returns read(1)'s exit status
 
-trap -x -t 60000 {
-	timeout {
-		importas -i -u ! !
-		kill -- ${!}
-	}
-}
-pipeline -w { tr -d "\r" }
-read
+timeout --foreground --preserve-status 60
+	pipeline -w { tr -d "\r" }
+	read

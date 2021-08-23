@@ -21,7 +21,7 @@ multisubstitute {
 	importas -i resource resource
 }
 
-backtick -n header-directory {
+backtick -x -n header-directory {
 	# for status code pages specifically
 	ifelse {
 		s6-test \${#} != 0

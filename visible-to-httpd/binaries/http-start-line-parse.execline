@@ -17,18 +17,18 @@
 # containing the request's method, requested resource, and http version
 # it then exec(3p)s into its command line
 
-backtick -i -n start_line { get-line-from-client.execline }
-backtick -I -n http_start_line_parse_method {
+backtick -n start_line { get-line-from-client.execline }
+backtick -x -n http_start_line_parse_method {
 	pipeline { printenv start_line }
 	pipeline { sed -n "s@^(CONNECT|DELETE|GET|HEAD|OPTIONS|PATCH|POST|PUT|TRACE) +.*@\\1@p" }
 	read
 }
-backtick -I -n http_start_line_parse_resource {
+backtick -x -n http_start_line_parse_resource {
 	pipeline { printenv start_line }
 	pipeline { sed -n "s@^[^ ]+ +(/[^ ]*) +.*@\\1@p" }
 	read
 }
-backtick -I -n http_start_line_parse_version {
+backtick -x -n http_start_line_parse_version {
 	pipeline { printenv start_line }
 	pipeline { sed -n "s@.*HTTP/([0-9]\.[0-9]) *@\\1@p" }
 	read
