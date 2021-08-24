@@ -56,8 +56,7 @@ if {
 			s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
 Content-Type: "${Content-Type}"\r
 Content-Length: "${Content-Length}"\r
-Date: "${Date}"\r
-"${extra_headers}"
+Date: "${Date}${extra_headers}"
 \r
 "
 		}
@@ -81,8 +80,7 @@ Date: "${Date}"\r
 			s6-echo -n -- "HTTP/1.1 "${1}" "${2}"\r
 Content-Type: application/xhtml+xml; charset=utf-8\r
 Content-Length: "${Content-Length}"\r
-Date: "${Date}"\r
-"${extra_headers}"
+Date: "${Date}${extra_headers}"
 \r
 "
 		}

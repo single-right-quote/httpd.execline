@@ -236,8 +236,7 @@ if -X -n -t {
 Content-Type: "${Content-Type}"\r
 Content-Length: "${Content-Length}"\r
 Last-Modified: "${Last-Modified}"\r
-Date: "${Date}"\r
-"${extra_headers}"
+Date: "${Date}${extra_headers}"
 \r
 "
 	}

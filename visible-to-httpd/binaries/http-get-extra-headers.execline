@@ -63,6 +63,9 @@ backtick -x -n header-directory {
 
 # (we output nothing if there is no applicable header directory, which is fine)
 if -t { s6-test -v header-directory }
+	# to avoid double \r\n in case we don't output anything
+	if { s6-echo -n -- "\r\n" }
+
 	importas -i -u header-directory header-directory
 
 	foreground { log.execline "header-directory: "${header-directory} }
