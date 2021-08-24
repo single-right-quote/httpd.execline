@@ -1,4 +1,4 @@
-#!/usr/local/skarnet/bin/execlineb -WP
+#!/usr/local/bin/execlineb -WP
 ## `httpd.execline`: a simple static web server ###
 # 
 # i would like to note that simplicity is relative; the *implementation* of

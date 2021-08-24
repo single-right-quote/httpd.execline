@@ -1,4 +1,4 @@
-#!/usr/local/skarnet/bin/execlineb -WP
+#!/usr/local/bin/execlineb -WP
 
-s6-setuidgid httpd
-s6-log t /log/httpd
+s6-setuidgid log
+s6-log t /log/httpd-ipc
