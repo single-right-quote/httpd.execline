@@ -45,7 +45,7 @@ if {
 		cd ${error_response_directory}
 
 		backtick -D "application/xhtml+xml; charset=utf-8" -n Content-Type { cat Content-Type }
-		backtick -i -n Content-Length { wc -c message_body }
+		backtick -i -n Content-Length { stat -c %s -- message_body }
 
 		multisubstitute {
 			importas -i -u Content-Type Content-Type
@@ -66,11 +66,10 @@ Date: "${Date}${extra_headers}"
 
 		# (why does `hoc -e` not work?)
 		backtick -n -E Content-Length {
-			backtick -i -n message_length {
+			backtick -E -i -n message_length {
 				pipeline { s6-echo -n -- ${2} }
 				wc -c
 			}
-			importas -i -u message_length message_length
 
 			pipeline { s6-echo -- ${message_length}"*2 + 288" }
 			hoc
