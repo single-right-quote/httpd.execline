@@ -142,7 +142,7 @@ the error response code has a generic fallback built into the script.
 you can override this using a `-fallback` domain folder, like with
 domain-level `default_headers`.
 
-#### `./visible-to-httpd/configuration/error_response_pages/` ###
+#### `./visible-to-httpd/configuration/overrides/` ###
 
 this directory allows you to override the extra headers sent along
 with a resource, and attach a status code other than 200 with them. a
@@ -152,12 +152,12 @@ numerical status code and optional textual message, as well as a
 `headers` folder, which specifies headers using the `default_headers`
 scheme.
 
-currently, the official website to `httpd-execline.eerie.garden`
-redirects to this github repository thanks to
+a former official website for `httpd-execline.eerie.garden`
+used to redirect to this github repository, thanks to
 
 + the file
-`./visible-to-httpd/configuration/error_response_pages/httpd-execline.eerie.garden/index.xhtml/status_code`
+`./visible-to-httpd/configuration/overrides/httpd-execline.eerie.garden/index.xhtml/status_code`
 containing the text `301 moved permanently`; and
 + the file
-`./visible-to-httpd/configuration/error_response_pages/httpd-execline.eerie.garden/index.xhtml/headers/Location`
+`./visible-to-httpd/configuration/overrides/httpd-execline.eerie.garden/index.xhtml/headers/Location`
 containing `https://github.com/single-right-quote/httpd.execline`
