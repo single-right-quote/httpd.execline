@@ -4,7 +4,7 @@
 # if `configuration/status-code/table/${hostname}/${STATUS_CODE} exists, `cat(1)` that
 # otherwise, fall back on a very generic error message
 
-fdclose 0
+heredoc 0 ""
 foreground {
 	if -t { s6-test \${#} = 3 }
 		log.execline "fatal: ??"${1}"??: "${3}

@@ -91,7 +91,7 @@ if -X -n -t {
  	importas -i hostname http_header_parse_Host
 
 	# we don’t need to read anything more from the client
-	fdclose 0
+	heredoc 0 ""
 
 	foreground {
 		log.execline
