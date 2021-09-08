@@ -175,8 +175,9 @@ ifelse { s6-test \${header_name} = Host }
 	#
 	ifelse -n { ${supported_hostname_test} ${header_contents} }
 	{
-		fdclose 0
-		exit 0
+		heredoc 0 ""
+		export http_header_parse_${header_name} ${header_contents}
+		${@}
 
 	}
 	export http_header_parse_${header_name} ${header_contents}

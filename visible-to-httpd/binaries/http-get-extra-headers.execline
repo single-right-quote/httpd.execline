@@ -17,7 +17,7 @@
 # TODO: write a GUI?? with like, `yad(1)` or something??? idk
 
 multisubstitute {
-	importas -i hostname http_header_parse_Host
+	importas -D -fallback hostname http_header_parse_Host
 	importas -i resource resource
 }
 
