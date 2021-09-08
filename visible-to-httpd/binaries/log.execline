@@ -2,9 +2,9 @@
 
 multisubstitute {
 	importas -D "" program_name program_name
-	importas -D "no client process id?" process_id process_id
-	importas -D "no remote ip address (not being run from an UCPSI server?)" remote_ip TCPREMOTEIP
-	importas -D "no remote port (not being run from an UCPSI server?)" remote_port TCPREMOTEPORT
+	importas -D "no_client_process_id?" process_id process_id
+	importas -D "no_remote_ip_address_(not_being_run_from_an_UCPSI-TCP_server?)" remote_ip TCPREMOTEIP
+	importas -D "no_remote_port_(not_being_run_from_an_UCPSI-TCP_server?)" remote_port TCPREMOTEPORT
 }
 
 fdmove -c 1 2
