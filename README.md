@@ -119,6 +119,11 @@ a `Strict-Transport-Security` file is a good idea; if you find it
 prudent to allow access as an onion service, an `Onion-Location` file
 is a good idea. and so on.
 
+the hostname and requested resource for the current request will be
+substituted for all instances of `${hostname}` and `${resource}` in
+the header contents, which might prove useful for the `Location` and
+`Onion-Location` headers.
+
 `\r` and newlines will be stripped from filenames and file contents to
 prevent trivial mischevious configurations from breaking HTTP
 responses; other than this, **these HTTP header folders are not

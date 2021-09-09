@@ -17,9 +17,16 @@
 # TODO: write a GUI?? with like, `yad(1)` or something??? idk
 
 multisubstitute {
-	importas -D -fallback hostname http_header_parse_Host
+	importas -D -no_hostname_parsed hostname http_header_parse_Host
+	importas -i requested_resource http_start_line_parse_resource
 	importas -i resource resource
 }
+define header_substitution_script
+"multisubstitute {
+	define hostname "${hostname}"
+	define resource "${requested_resource}"
+}
+s6-echo -n -- "
 
 backtick -x -n header-directory {
 	# for status code pages specifically
@@ -82,9 +89,13 @@ if -t { s6-test -v header-directory }
 			tr -d "\r\n"
 		}
 		if {
-			pipeline { cat ${header_name} }
-			tr -d "\r\n"
+			backtick -E -n unparsed_header_contents {
+				pipeline { cat ${header_name} }
+				tr -d "\r\n"
+			}
+			execlineb -WPc ${header_substitution_script}${unparsed_header_contents}
 		}
+
 		s6-echo -n -- "\r\n"
 	# do remember to add the terminating `\r\n`!
 
