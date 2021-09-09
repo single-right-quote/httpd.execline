@@ -112,9 +112,9 @@ for `my-cool-web.site, not to mention also with `-fallback`. but this
 functionality is probably well worth adding.)
 
 in subfolders matching hostnames, files named after a header should
-contain the contents of that header. <!-- a personal site heavily
+contain the contents of that header. a personal site heavily
 associated with a mastodon account would perhaps add a file
-`X-Clacks-Overhead`, containing the contents `GNU Natalie Nguyen`. -->
+`X-Clacks-Overhead`, containing the contents `GNU Natalie Nguyen`;
 a `Strict-Transport-Security` file is a good idea; if you find it
 prudent to allow access as an onion service, an `Onion-Location` file
 is a good idea. and so on.
