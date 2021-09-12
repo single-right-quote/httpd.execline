@@ -105,12 +105,6 @@ resources associated with a particular hostname, as well as a
 `-fallback` which takes effect if there is no store for that domain
 (or that specific resource; see `overrides` below).
 
-(there is presently no mechanism for combining a more specific match
-for headers with a less specific one; you cannot combine unique
-headers for a resource on `my-cool-web.site` with the default headers
-for `my-cool-web.site, not to mention also with `-fallback`. but this
-functionality is probably well worth adding.)
-
 in subfolders matching hostnames, files named after a header should
 contain the contents of that header. a personal site heavily
 associated with a mastodon account would perhaps add a file
