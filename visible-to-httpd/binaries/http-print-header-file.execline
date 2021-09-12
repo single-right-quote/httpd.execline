@@ -1,6 +1,15 @@
 #!/binaries/execlineb -W
+#
+# http-print-header-files.execline [files ...]
+#
+# print out given files as http headers. earlier files override later ones.
+# instances of ${hostname} and ${resource} are substituted with the provided
+# host and resource from the request
+#
+# execs into self in order to retain an environment variable which marks
+# whether a certain header has been overridden or not
 
-# quit if there are no arguments
+# base case: quit if there are no arguments
 ifelse {
 	importas "#" "#"
 	s6-test ${#} = 0
@@ -9,31 +18,33 @@ ifelse {
 	exit 0
 }
 
-# otherwise, print the contents of the current header directory
+# recursive case: print the current header
+
 importas header_file 1
 shift
 elgetpositionals
 emptyenv -P
 
+# performs `basename ${header_file}`
 backtick -E -n header_name {
 	pipeline { s6-echo -n -- ${header_file} }
 	sed "s@.*/([^/]*)@\\1@"
 }
 
-if { log.execline \"${header_file}\" \"${header_name}\" }
-
-# short circuit on a duplicate header name
+# short circuit on overridden header
 ifelse { s6-test -v http_print_header_directories_${header_name} }
 {
-	foreground { log.execline "ignoring duplicate header_name: "\"${header_name}\" }
+	foreground { log.execline "ignoring overridden header_name: "\"${header_name}\" }
 	http-print-header-directories.execline ${@}
 }
 
 # otherwise, print out the header line
+
 multisubstitute {
 	importas -D -no_hostname_parsed hostname http_header_parse_Host
 	importas -D -no_resource_parsed requested_resource http_start_line_parse_resource
 }
+# wrapper around s6-echo for hostname and resource substitutions in header contents
 define header_substitution_script
 "multisubstitute {
 	define hostname "${hostname}"
@@ -50,12 +61,14 @@ if {
 if {
 	backtick -E -n unparsed_header_contents {
 		pipeline { cat ${header_file} }
-			tr -d "\r\n"
+		tr -d "\r\n"
 	}
 	execlineb -WPc ${header_substitution_script}${unparsed_header_contents}
 }
 if { s6-echo -n -- "\r\n" }
 # do remember to add the terminating `\r\n`!
 
+# we have printed this header and therefore overridden any later instance of it
 export http_print_header_directories_${header_name} ""
+
 http-print-header-directories.execline ${@}

@@ -27,7 +27,7 @@ elglob -0 -s hostname_headers configuration/default_headers/${hostname}/*
 elglob -0 -s fallback_headers configuration/default_headers/-fallback/*
 
 if { s6-echo -n -- "\r\n" }
-http-print-header-directories.execline
+http-print-header-files.execline
 	${error_response_page_headers}
 	${resource_headers}
 	${hostname_headers}
