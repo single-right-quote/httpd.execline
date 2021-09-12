@@ -18,84 +18,17 @@
 
 multisubstitute {
 	importas -D -no_hostname_parsed hostname http_header_parse_Host
-	importas -i requested_resource http_start_line_parse_resource
-	importas -i resource resource
-}
-define header_substitution_script
-"multisubstitute {
-	define hostname "${hostname}"
-	define resource "${requested_resource}"
-}
-s6-echo -n -- "
-
-backtick -x -n header-directory {
-	# for status code pages specifically
-	ifelse {
-		s6-test \${#} != 0
-			-a -d configuration/error_response_pages/${1}/headers
-			-a -r configuration/error_response_pages/${1}/headers
-	}
-	{
-		s6-echo -n -- configuration/error_response_pages/${1}/headers
-	}
-
-	# otherwise: prioritize header specifications in order of specificity:
-	# by resource, then by hostname, then the fallback (and finally nothing)
-	ifelse {
-		s6-test -d configuration/overrides/${resource}/headers
-			-a -r configuration/overrides/${resource}/headers
-	}
-	{
-		s6-echo -n -- configuration/overrides/${resource}/headers
-	}
-	ifelse {
-		s6-test -d configuration/default_headers/${hostname}
-			-a -r configuration/default_headers/${hostname}
-	}
-	{
-		s6-echo -n -- configuration/default_headers/${hostname}
-	}
-	# the preferred name for a DNS lookup should begin with an alphanumeric,
-	# so “-fallback”, since it begins with a hyphen, should never conflict
-	# with a hostname anybody would ever actually use
-	ifelse {
-		s6-test -d configuration/default_headers/-fallback
-			-a -r configuration/default_headers/-fallback
-	}
-	{
-		s6-echo -n -- configuration/default_headers/-fallback
-	}
-		exit 1
+	importas -D -no_resource_parsed resource resource
 }
 
-# (we output nothing if there is no applicable header directory, which is fine)
-if -t { s6-test -v header-directory }
-	# to avoid double \r\n in case we don't output anything
-	if { s6-echo -n -- "\r\n" }
+elglob -0 -s error_response_page_headers configuration/error_response_pages/${1}/headers/*
+elglob -0 -s resource_headers configuration/overrides/${resource}/headers/*
+elglob -0 -s hostname_headers configuration/default_headers/${hostname}/*
+elglob -0 -s fallback_headers configuration/default_headers/-fallback/*
 
-	importas -i -u header-directory header-directory
-
-	foreground { log.execline "header-directory: "${header-directory} }
-
-	cd ${header-directory}
-	elglob -0 -s header_names *
-
-	# we’ll strip out `\r`s and `\n`s from filenames and file contents, in
-	# case the configuration should ever be made in a mischevious way
-	forx header_name { ${header_names} }
-		importas -i -u header_name header_name
-		if {
-			pipeline { s6-echo -n -- ${header_name}": " }
-			tr -d "\r\n"
-		}
-		if {
-			backtick -E -n unparsed_header_contents {
-				pipeline { cat ${header_name} }
-				tr -d "\r\n"
-			}
-			execlineb -WPc ${header_substitution_script}${unparsed_header_contents}
-		}
-
-		s6-echo -n -- "\r\n"
-	# do remember to add the terminating `\r\n`!
-
+if { s6-echo -n -- "\r\n" }
+http-print-header-directories.execline
+	${error_response_page_headers}
+	${resource_headers}
+	${hostname_headers}
+	${fallback_headers}

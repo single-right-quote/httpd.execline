@@ -1,0 +1,61 @@
+#!/binaries/execlineb -W
+
+# quit if there are no arguments
+ifelse {
+	importas "#" "#"
+	s6-test ${#} = 0
+}
+{
+	exit 0
+}
+
+# otherwise, print the contents of the current header directory
+importas header_file 1
+shift
+elgetpositionals
+emptyenv -P
+
+backtick -E -n header_name {
+	pipeline { s6-echo -n -- ${header_file} }
+	sed "s@.*/([^/]*)@\\1@"
+}
+
+if { log.execline \"${header_file}\" \"${header_name}\" }
+
+# short circuit on a duplicate header name
+ifelse { s6-test -v http_print_header_directories_${header_name} }
+{
+	foreground { log.execline "ignoring duplicate header_name: "\"${header_name}\" }
+	http-print-header-directories.execline ${@}
+}
+
+# otherwise, print out the header line
+multisubstitute {
+	importas -D -no_hostname_parsed hostname http_header_parse_Host
+	importas -D -no_resource_parsed requested_resource http_start_line_parse_resource
+}
+define header_substitution_script
+"multisubstitute {
+	define hostname "${hostname}"
+	define resource "${requested_resource}"
+}
+s6-echo -n -- "
+
+# we’ll strip out `\r`s and `\n`s from filenames and file contents, in
+# case the configuration should ever be made in a mischevious way
+if {
+	pipeline { s6-echo -n -- ${header_name}": " }
+	tr -d "\r\n"
+}
+if {
+	backtick -E -n unparsed_header_contents {
+		pipeline { cat ${header_file} }
+			tr -d "\r\n"
+	}
+	execlineb -WPc ${header_substitution_script}${unparsed_header_contents}
+}
+if { s6-echo -n -- "\r\n" }
+# do remember to add the terminating `\r\n`!
+
+export http_print_header_directories_${header_name} ""
+http-print-header-directories.execline ${@}
